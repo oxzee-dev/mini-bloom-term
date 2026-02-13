@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Terminal, TrendingUp, TrendingDown, Activity, 
   Globe, DollarSign, BarChart3, PieChart, Newspaper, 
-  Cpu, Layers, Zap, Command, Clock, 
+  Cpu, Layers, Zap, Clock, 
   Briefcase, ChevronRight, Wind,
   Home, Heart, ShoppingCart,
   Radio, Factory, Landmark, Smartphone
@@ -592,7 +592,7 @@ export default function MiniBloomberg() {
           <div className="p-6">
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> ETF THEMES</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {activeData.data?.map((item: StockData, idx: number) => {
+              {activeData.data?.map((item: StockData) => {
                 const theme = activeData.themes.find((t: any) => t.symbol === item.symbol);
                 return (
                   <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
@@ -649,7 +649,7 @@ export default function MiniBloomberg() {
           <div className="p-6">
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> SECTOR PERFORMANCE</h2>
             <div className="space-y-3">
-              {activeData.data?.map((item: StockData, idx: number) => {
+              {activeData.data?.map((item: StockData) => {
                 const sector = activeData.sectors.find((s: any) => s.symbol === item.symbol);
                 const Icon = sector?.icon || Layers;
                 const isUp = item.change >= 0;
