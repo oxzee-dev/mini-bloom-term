@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Terminal, Search, TrendingUp, TrendingDown, Activity, 
+  Terminal, TrendingUp, TrendingDown, Activity, 
   Globe, DollarSign, BarChart3, PieChart, Newspaper, 
-  Cpu, Layers, Zap, ArrowRight, Command, Clock, 
-  Briefcase, Hash, Percent, ChevronRight, X, Wind,
-  Home, Shield, Zap as ZapIcon, Truck, Heart, ShoppingCart,
-  Radio, Factory, BookOpen, Landmark, Smartphone
+  Cpu, Layers, Zap, Command, Clock, 
+  Briefcase, ChevronRight, Wind,
+  Home, Heart, ShoppingCart,
+  Radio, Factory, Landmark, Smartphone
 } from 'lucide-react';
 
 // --- Types ---
-
 interface StockData {
   symbol: string;
   price: number;
@@ -26,7 +25,6 @@ interface StockData {
   targetHigh?: number;
   targetLow?: number;
   recommendation?: string;
-  // For FA
   revenue?: string;
   netIncome?: string;
   grossMargin?: number;
@@ -37,16 +35,18 @@ interface StockData {
   bookValue?: string;
   debtToEquity?: string;
   roe?: number;
-  // Generic
   name?: string;
   sector?: string;
   industry?: string;
   description?: string;
   website?: string;
   employees?: number;
-  // For yields
-  yield?: number;
-  maturityDate?: string;
+  enterpriseValue?: string;
+  revenuePerShare?: string;
+  freeCashFlow?: string;
+  beta?: number;
+  fiftyTwoWeekChange?: string;
+  currentRatio?: number;
 }
 
 interface NewsItem {
@@ -56,14 +56,7 @@ interface NewsItem {
   published: string;
 }
 
-interface ApiResponse {
-  data?: StockData[];
-  news?: NewsItem[];
-  error?: string;
-}
-
-// --- Constants & Config ---
-
+// --- Constants ---
 const API_BASE = 'https://mini-finapi.vercel.app/api/ticker';
 
 const INDICES = [
@@ -75,12 +68,10 @@ const INDICES = [
   { symbol: '^N225', name: 'NIKKEI 225' },
   { symbol: '^GDAXI', name: 'DAX' },
   { symbol: '^HSI', name: 'HANG SENG' },
-  { symbol: '^AXJO', name: 'ASX 200' },
   { symbol: 'EURUSD=X', name: 'EUR/USD' },
   { symbol: 'GC=F', name: 'GOLD' },
   { symbol: 'CL=F', name: 'CRUDE OIL' },
   { symbol: 'BTC-USD', name: 'BITCOIN' },
-  { symbol: 'ETH-USD', name: 'ETHEREUM' },
 ];
 
 const COMMANDS = [
@@ -106,10 +97,10 @@ const SECTOR_ETFS = [
   { symbol: 'XLK', name: 'Technology', icon: Cpu },
   { symbol: 'XLF', name: 'Financials', icon: Landmark },
   { symbol: 'XLV', name: 'Health Care', icon: Heart },
-  { symbol: 'XLE', name: 'Energy', icon: ZapIcon },
+  { symbol: 'XLE', name: 'Energy', icon: Zap },
   { symbol: 'XLI', name: 'Industrials', icon: Factory },
   { symbol: 'XLP', name: 'Consumer Staples', icon: ShoppingCart },
-  { symbol: 'XLY', name: 'Consumer Disc.', icon: Truck },
+  { symbol: 'XLY', name: 'Consumer Disc.', icon: Smartphone },
   { symbol: 'XLB', name: 'Materials', icon: Factory },
   { symbol: 'XLU', name: 'Utilities', icon: Zap },
   { symbol: 'XLRE', name: 'Real Estate', icon: Home },
@@ -119,10 +110,6 @@ const SECTOR_ETFS = [
 const ETF_THEMES = [
   { symbol: 'ARKK', theme: 'Innovation', desc: 'Disruptive Innovation' },
   { symbol: 'ARKG', theme: 'Genomics', desc: 'Genomic Revolution' },
-  { symbol: 'SPACE', theme: 'Space', desc: 'Space Exploration' },
-  { symbol: 'QTUM', theme: 'Quantum', desc: 'Quantum Computing' },
-  { symbol: 'CYBER', theme: 'Cybersecurity', desc: 'Cyber Security' },
-  { symbol: 'MEME', theme: 'Meme', desc: 'Meme Stocks' },
   { symbol: 'SMH', theme: 'Semiconductors', desc: 'Semiconductor Index' },
   { symbol: 'ICLN', theme: 'Clean Energy', desc: 'Global Clean Energy' },
   { symbol: 'CLOU', theme: 'Cloud', desc: 'Cloud Computing' },
@@ -130,93 +117,38 @@ const ETF_THEMES = [
   { symbol: 'BOTZ', theme: 'Robotics', desc: 'Robotics & AI' },
   { symbol: 'ESPO', theme: 'Gaming', desc: 'Video Gaming & Esports' },
   { symbol: 'LIT', theme: 'Lithium', desc: 'Lithium & Battery Tech' },
-  { symbol: 'URA', theme: 'Uranium', desc: 'Global Uranium' },
   { symbol: 'BLOK', theme: 'Blockchain', desc: 'Blockchain Tech' },
-  { symbol: 'MJ', theme: 'Cannabis', desc: 'Cannabis Index' },
-  { symbol: 'IDRV', theme: 'Autonomous', desc: 'Self-Driving EV' },
-  { symbol: 'SNSR', theme: 'IoT', desc: 'Internet of Things' },
-  { symbol: 'PHO', theme: 'Water', desc: 'Water Resources' },
-  { symbol: 'WOOD', theme: 'Timber', desc: 'Timber & Forestry' },
 ];
 
 // --- Components ---
 
-const TickerTape = () => {
-  const [data, setData] = useState<StockData[]>([]);
-
-  useEffect(() => {
-    const fetchTape = async () => {
-      const symbols = INDICES.map(i => i.symbol).join(',');
-      try {
-        const res = await fetch(`${API_BASE}?ticker=${symbols}`);
-        const json = await res.json();
-        if (json.data) setData(json.data);
-      } catch (e) { console.error("Tape error", e); }
-    };
-    fetchTape();
-    const interval = setInterval(fetchTape, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const renderItem = (item: StockData, idx: number) => {
-    const isUp = item.change >= 0;
-    const color = isUp ? 'text-bloomberg-green' : 'text-bloomberg-red';
-    const Icon = isUp ? TrendingUp : TrendingDown;
-    const label = INDICES.find(i => i.symbol === item.symbol)?.name || item.symbol;
-
-    return (
-      <div key={`${item.symbol}-${idx}`} className="flex items-center space-x-2 px-4 whitespace-nowrap">
-        <span className="font-bold text-gray-300">{label}</span>
-        <span className={color}>{item.price?.toFixed(2)}</span>
-        <span className={`flex items-center text-xs ${color}`}>
-          <Icon size={12} className="mr-1" />
-          {Math.abs(item.changePercent).toFixed(2)}%
-        </span>
-      </div>
-    );
-  };
-
-  return (
-    <div className="h-10 bg-bloomberg-black border-b border-bloomberg-gray flex items-center overflow-hidden relative z-20">
-      <div className="bg-bloomberg-orange text-black font-bold px-4 h-full flex items-center z-10 shadow-lg shrink-0">
-        MARKETS
-      </div>
-      <div className="flex animate-ticker">
-        {[...data, ...data].map((item, idx) => renderItem(item, idx))}
-      </div>
-    </div>
-  );
-};
-
 const ProgressBar = ({ value, color = "bg-bloomberg-orange" }: { value: number, color?: string }) => (
   <div className="w-full bg-bloomberg-gray h-2 rounded-full overflow-hidden">
-    <div 
-      className={`h-full ${color} transition-all duration-500`} 
-      style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
-    />
+    <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
   </div>
 );
 
 const MetricCard = ({ label, value, sub, trend }: any) => (
   <div className="bg-bloomberg-dark border border-bloomberg-gray p-4 rounded-sm hover:border-bloomberg-orange transition-colors">
     <div className="text-bloomberg-light-gray text-xs uppercase tracking-wider mb-1">{label}</div>
-    <div className="text-2xl font-terminal font-bold text-white mb-1">{value}</div>
+    <div className="text-2xl font-terminal font-bold text-white mb-1">{value || '-'}</div>
     {sub && <div className={`text-xs font-mono ${trend === 'up' ? 'text-bloomberg-green' : trend === 'down' ? 'text-bloomberg-red' : 'text-gray-400'}`}>{sub}</div>}
   </div>
 );
 
-const HeatmapBox = ({ item, size = 'normal' }: { item: StockData, size?: 'small' | 'normal' | 'large' }) => {
+const HeatmapBox = ({ item, onClick }: { item: StockData, onClick: () => void }) => {
   const isUp = item.change >= 0;
   const intensity = Math.min(Math.abs(item.changePercent) * 8, 100);
   const bg = isUp 
     ? `rgba(0, 204, 0, ${0.2 + (intensity / 100) * 0.8})` 
     : `rgba(255, 51, 51, ${0.2 + (intensity / 100) * 0.8})`;
   
-  const heightClass = size === 'small' ? 'h-20' : size === 'large' ? 'h-40' : 'h-28';
-
   return (
-    <div className={`${heightClass} relative bg-bloomberg-dark border border-bloomberg-gray flex flex-col justify-between p-3 overflow-hidden group hover:border-white transition-colors cursor-pointer`} onClick={() => window.dispatchEvent(new CustomEvent('terminal:command', { detail: `DES ${item.symbol}` }))}>
-      <div className="absolute inset-0 pointer-events-none transition-colors duration-300" style={{ backgroundColor: bg }}></div>
+    <div 
+      className="h-28 relative bg-bloomberg-dark border border-bloomberg-gray flex flex-col justify-between p-3 overflow-hidden cursor-pointer hover:border-white transition-colors"
+      onClick={onClick}
+    >
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: bg }}></div>
       <div className="relative z-10">
         <div className="font-bold text-white text-sm">{item.symbol}</div>
         <div className="text-xs text-gray-300">${item.price?.toFixed(2)}</div>
@@ -239,15 +171,24 @@ export default function MiniBloomberg() {
   const [loading, setLoading] = useState(false);
   const [activeData, setActiveData] = useState<any>(null);
   const [activeCommand, setActiveCommand] = useState('');
+  const [tickerData, setTickerData] = useState<StockData[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
-  // Listen for custom command events from heatmap clicks
+  // Fetch ticker tape data
   useEffect(() => {
-    const handler = (e: CustomEvent) => handleCommand(e.detail);
-    window.addEventListener('terminal:command', handler as EventListener);
-    return () => window.removeEventListener('terminal:command', handler as EventListener);
+    const fetchTape = async () => {
+      const symbols = INDICES.map(i => i.symbol).join(',');
+      try {
+        const res = await fetch(`${API_BASE}?ticker=${symbols}`);
+        const json = await res.json();
+        if (json.data) setTickerData(json.data);
+      } catch (e) { console.error("Tape error", e); }
+    };
+    fetchTape();
+    const interval = setInterval(fetchTape, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -285,12 +226,12 @@ export default function MiniBloomberg() {
       }
 
       if (cmd === 'WEI') {
-        const res = await fetch(`${API_BASE}?ticker=^GSPC,^NDX,^DJI,^FTSE,^N225,^GDAXI,^HSI,^AXJO,^GSPTSE,^FCHI`);
+        const res = await fetch(`${API_BASE}?ticker=^GSPC,^NDX,^DJI,^FTSE,^N225,^GDAXI,^HSI,^AXJO`);
         const json = await res.json();
         setActiveData({ type: 'WEI', data: json.data });
       } 
       else if (cmd === 'GP') {
-        const etfs = "SPY,QQQ,IWM,TLT,GLD,USO,EEM,FXI,UUP,SLV,SOXX,XLF,XLE,VNQ,EMB,HYG,LQD";
+        const etfs = "SPY,QQQ,IWM,TLT,GLD,USO,EEM,FXI,UUP,SLV,SOXX,VNQ";
         const res = await fetch(`${API_BASE}?ticker=${etfs}`);
         const json = await res.json();
         setActiveData({ type: 'GP', data: json.data });
@@ -301,7 +242,7 @@ export default function MiniBloomberg() {
         setActiveData({ type: 'STX', data: json.data });
       }
       else if (cmd === 'CRYP') {
-        const res = await fetch(`${API_BASE}?ticker=BTC-USD,ETH-USD,SOL-USD,XRP-USD,ADA-USD,DOGE-USD,DOT-USD,LINK-USD,AVAX-USD,MATIC-USD,MSTR,COIN,HOOD,RIOT,MARA`);
+        const res = await fetch(`${API_BASE}?ticker=BTC-USD,ETH-USD,SOL-USD,XRP-USD,ADA-USD,DOGE-USD,MSTR,COIN,HOOD`);
         const json = await res.json();
         setActiveData({ type: 'CRYP', data: json.data });
       }
@@ -312,13 +253,12 @@ export default function MiniBloomberg() {
         setActiveData({ type: 'ETF', data: json.data, themes: ETF_THEMES });
       }
       else if (cmd === 'NEWS') {
-        const res = await fetch(`${API_BASE}?ticker=SPY,QQQ,IWM,DIA`);
+        const res = await fetch(`${API_BASE}?ticker=SPY,QQQ,IWM`);
         const json = await res.json();
-        setActiveData({ type: 'NEWS', data: json.data, news: json.news || [] });
+        setActiveData({ type: 'NEWS', news: json.news || [] });
       }
       else if (cmd === 'ECO') {
-        // Economic data - yields and VIX
-        const res = await fetch(`${API_BASE}?ticker=^VIX,TNX,^FVX,^TYX,DGS10,DGS2,DGS30,BZ=F,GC=F,CL=F,NG=F`);
+        const res = await fetch(`${API_BASE}?ticker=^VIX,TNX,^FVX,^TYX,GC=F,CL=F`);
         const json = await res.json();
         setActiveData({ type: 'ECO', data: json.data });
       }
@@ -329,14 +269,12 @@ export default function MiniBloomberg() {
         setActiveData({ type: 'SECF', data: json.data, sectors: SECTOR_ETFS });
       }
       else if (cmd === 'INDU') {
-        // Industry view - fetch major industry ETFs
-        const res = await fetch(`${API_BASE}?ticker=KIE,IAI,XHE,XBI,XRT,XHB,XSW,XTN,XME,XES`);
+        const res = await fetch(`${API_BASE}?ticker=KIE,IAI,XBI,XRT,XHB,XSW,XME`);
         const json = await res.json();
         setActiveData({ type: 'INDU', data: json.data });
       }
       else if (cmd === 'RV') {
-        // Relative valuation comparison
-        const res = await fetch(`${API_BASE}?ticker=AAPL,MSFT,GOOGL,AMZN,META,NFLX,NVDA,TSLA,CRM,ADBE`);
+        const res = await fetch(`${API_BASE}?ticker=AAPL,MSFT,GOOGL,AMZN,META,NFLX,NVDA,TSLA`);
         const json = await res.json();
         setActiveData({ type: 'RV', data: json.data });
       }
@@ -435,7 +373,7 @@ export default function MiniBloomberg() {
         return (
           <div className="p-6">
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Globe className="mr-2"/> WORLD EQUITY INDICES</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {activeData.data?.map((item: StockData) => (
                 <div key={item.symbol} className="bg-bloomberg-dark p-4 border-l-4 border-bloomberg-orange hover:bg-bloomberg-gray transition-colors">
                   <div className="text-gray-400 text-xs mb-1">{INDICES.find(i => i.symbol === item.symbol)?.name || item.symbol}</div>
@@ -456,19 +394,8 @@ export default function MiniBloomberg() {
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><BarChart3 className="mr-2"/> GLOBAL PERFORMANCE HEATMAP</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {activeData.data?.map((item: StockData) => (
-                <HeatmapBox key={item.symbol} item={item} />
+                <HeatmapBox key={item.symbol} item={item} onClick={() => handleCommand(`DES ${item.symbol}`)} />
               ))}
-            </div>
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400">
-              <div className="bg-bloomberg-dark p-3 border border-bloomberg-gray">
-                <strong className="text-white">EQUITIES:</strong> SPY, QQQ, IWM
-              </div>
-              <div className="bg-bloomberg-dark p-3 border border-bloomberg-gray">
-                <strong className="text-white">FIXED INCOME:</strong> TLT, HYG, LQD, EMB
-              </div>
-              <div className="bg-bloomberg-dark p-3 border border-bloomberg-gray">
-                <strong className="text-white">COMMODITIES:</strong> GLD, USO, SLV, UUP
-              </div>
             </div>
           </div>
         );
@@ -484,7 +411,6 @@ export default function MiniBloomberg() {
                   <th className="p-3">PRICE</th>
                   <th className="p-3">CHANGE %</th>
                   <th className="p-3">MKT CAP</th>
-                  <th className="p-3">VOLUME</th>
                   <th className="p-3">P/E</th>
                   <th className="p-3">FWD P/E</th>
                   <th className="p-3">REC</th>
@@ -493,16 +419,12 @@ export default function MiniBloomberg() {
               <tbody className="text-sm font-mono">
                 {activeData.data?.map((item: StockData) => (
                   <tr key={item.symbol} className="border-b border-bloomberg-gray hover:bg-bloomberg-gray/50 cursor-pointer transition-colors" onClick={() => handleCommand(`DES ${item.symbol}`)}>
-                    <td className="p-3 font-bold text-white flex items-center gap-2">
-                      {item.symbol}
-                      {item.change >= 0 ? <TrendingUp size={14} className="text-bloomberg-green"/> : <TrendingDown size={14} className="text-bloomberg-red"/>}
-                    </td>
+                    <td className="p-3 font-bold text-white">{item.symbol}</td>
                     <td className="p-3 text-white">${item.price?.toFixed(2)}</td>
                     <td className={`p-3 font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
                       {item.changePercent > 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
                     </td>
                     <td className="p-3 text-gray-400">{item.marketCap}</td>
-                    <td className="p-3 text-gray-400">{item.volume}</td>
                     <td className="p-3 text-gray-400">{item.pe?.toFixed(1) || '-'}</td>
                     <td className="p-3 text-gray-400">{item.forwardPE?.toFixed(1) || '-'}</td>
                     <td className="p-3">
@@ -531,7 +453,6 @@ export default function MiniBloomberg() {
                 <div className="text-sm text-gray-400 mt-1 flex flex-wrap gap-4">
                   <span className="bg-bloomberg-gray px-2 py-0.5 rounded text-xs">{d.sector}</span>
                   <span className="bg-bloomberg-gray px-2 py-0.5 rounded text-xs">{d.industry}</span>
-                  <a href={d.website} target="_blank" rel="noreferrer" className="text-bloomberg-blue hover:underline">{d.website}</a>
                 </div>
               </div>
               <div className="text-right bg-bloomberg-dark p-4 rounded border border-bloomberg-gray">
@@ -540,23 +461,16 @@ export default function MiniBloomberg() {
                   {d.change >= 0 ? <TrendingUp size={18} className="mr-1"/> : <TrendingDown size={18} className="mr-1"/>}
                   {d.change >= 0 ? '+' : ''}{d.change?.toFixed(2)} ({d.changePercent?.toFixed(2)}%)
                 </div>
-                <div className="text-xs text-gray-500 mt-1">Vol: {d.volume}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
               <MetricCard label="Market Cap" value={d.marketCap} />
-              <MetricCard label="Enterprise Value" value={d.enterpriseValue} />
-              <MetricCard label="P/E Ratio (TTM)" value={d.pe?.toFixed(2)} sub="vs Sector: 22.4" />
-              <MetricCard label="Forward P/E" value={d.forwardPE?.toFixed(2)} trend="up" />
-              <MetricCard label="PEG Ratio" value={d.pegRatio?.toFixed(2)} />
-              <MetricCard label="Price Target" value={`$${d.targetLow?.toFixed(0)} - $${d.targetHigh?.toFixed(0)}`} sub={`Consensus: ${d.recommendation}`} />
+              <MetricCard label="P/E Ratio" value={d.pe?.toFixed(2)} />
+              <MetricCard label="Forward P/E" value={d.forwardPE?.toFixed(2)} />
+              <MetricCard label="Price Target" value={`$${d.targetLow?.toFixed(0)} - $${d.targetHigh?.toFixed(0)}`} />
               <MetricCard label="Employees" value={d.employees?.toLocaleString()} />
-              <MetricCard label="Revenue (TTM)" value={d.revenue} />
-              <MetricCard label="Profit Margin" value={`${d.netMargin}%`} />
-              <MetricCard label="Operating Margin" value={`${d.operatingMargin}%`} />
-              <MetricCard label="ROE" value={`${d.roe}%`} />
-              <MetricCard label="Debt/Equity" value={d.debtToEquity} />
+              <MetricCard label="Revenue" value={d.revenue} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -568,7 +482,7 @@ export default function MiniBloomberg() {
                 <h3 className="text-bloomberg-orange font-bold mb-3 flex items-center text-sm uppercase tracking-wider"><Newspaper size={16} className="mr-2"/> Latest News</h3>
                 <ul className="space-y-3">
                   {activeData.news?.slice(0, 5).map((n: NewsItem, i: number) => (
-                    <li key={i} className="text-sm text-gray-300 hover:text-white cursor-pointer border-b border-gray-800 pb-2 last:border-0 last:pb-0 transition-colors">
+                    <li key={i} className="text-sm text-gray-300 hover:text-white cursor-pointer border-b border-gray-800 pb-2 last:border-0">
                       <a href={n.link} target="_blank" rel="noreferrer" className="block">
                         <span className="text-bloomberg-blue block text-xs mb-0.5 font-mono">{n.publisher} • {n.published}</span>
                         <span className="line-clamp-2">{n.title}</span>
@@ -590,95 +504,46 @@ export default function MiniBloomberg() {
               <DollarSign size={20} />
               <span className="text-xl font-bold">FINANCIAL ANALYSIS</span>
               <span className="text-white ml-2 font-mono">{f.symbol}</span>
-              <span className="text-gray-500 text-sm ml-auto">{f.name}</span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <MetricCard label="Revenue (TTM)" value={f.revenue} sub="+12.4% YoY" trend="up" />
-              <MetricCard label="Revenue Per Share" value={f.revenuePerShare} />
-              <MetricCard label="Net Income" value={f.netIncome} sub="+5.2% YoY" trend="up" />
+              <MetricCard label="Revenue" value={f.revenue} />
+              <MetricCard label="Net Income" value={f.netIncome} />
+              <MetricCard label="Gross Margin" value={`${f.grossMargin}%`} />
+              <MetricCard label="Net Margin" value={`${f.netMargin}%`} />
               <MetricCard label="EBITDA" value={f.ebitda} />
-              <MetricCard label="Gross Margin" value={`${f.grossMargin}%`} sub="Industry Avg: 42%" />
-              <MetricCard label="Operating Margin" value={`${f.operatingMargin}%`} />
-              <MetricCard label="Profit Margin" value={`${f.netMargin}%`} sub="Industry Avg: 15%" />
-              <MetricCard label="Free Cash Flow" value={f.freeCashFlow} />
+              <MetricCard label="EPS" value={f.eps} />
+              <MetricCard label="ROE" value={`${f.roe}%`} />
+              <MetricCard label="Debt/Equity" value={f.debtToEquity} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-bloomberg-dark p-5 border border-bloomberg-gray rounded">
                 <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase">Margin Analysis</h4>
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div>
-                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-gray-300">Gross Margin</span>
-                      <span className="text-bloomberg-orange font-bold">{f.grossMargin}%</span>
-                    </div>
+                    <div className="flex justify-between text-xs mb-1"><span>Gross Margin</span><span>{f.grossMargin}%</span></div>
                     <ProgressBar value={f.grossMargin || 0} color="bg-bloomberg-orange" />
                   </div>
                   <div>
-                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-gray-300">Operating Margin</span>
-                      <span className="text-bloomberg-yellow font-bold">{f.operatingMargin}%</span>
-                    </div>
+                    <div className="flex justify-between text-xs mb-1"><span>Operating Margin</span><span>{f.operatingMargin}%</span></div>
                     <ProgressBar value={f.operatingMargin || 0} color="bg-bloomberg-yellow" />
                   </div>
                   <div>
-                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-gray-300">Net Margin</span>
-                      <span className="text-bloomberg-green font-bold">{f.netMargin}%</span>
-                    </div>
+                    <div className="flex justify-between text-xs mb-1"><span>Net Margin</span><span>{f.netMargin}%</span></div>
                     <ProgressBar value={f.netMargin || 0} color="bg-bloomberg-green" />
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-gray-300">ROE</span>
-                      <span className="text-bloomberg-blue font-bold">{f.roe}%</span>
-                    </div>
-                    <ProgressBar value={(f.roe || 0) / 2} color="bg-bloomberg-blue" />
                   </div>
                 </div>
               </div>
-
-              <div className="col-span-2 bg-bloomberg-dark p-5 border border-bloomberg-gray rounded overflow-x-auto">
+              <div className="bg-bloomberg-dark p-5 border border-bloomberg-gray rounded">
                 <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase">Key Statistics</h4>
                 <table className="w-full text-sm">
                   <tbody className="divide-y divide-gray-800">
-                    <tr>
-                      <td className="py-3 text-gray-400">Market Cap</td>
-                      <td className="py-3 text-right text-white font-mono">{f.marketCap}</td>
-                      <td className="py-3 pl-8 text-gray-400">Beta (5Y Monthly)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.beta}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 text-gray-400">Enterprise Value</td>
-                      <td className="py-3 text-right text-white font-mono">{f.enterpriseValue}</td>
-                      <td className="py-3 pl-8 text-gray-400">52-Week Change</td>
-                      <td className="py-3 text-right text-white font-mono">{f.fiftyTwoWeekChange}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 text-gray-400">P/E Ratio (TTM)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.pe?.toFixed(2)}</td>
-                      <td className="py-3 pl-8 text-gray-400">Forward P/E</td>
-                      <td className="py-3 text-right text-white font-mono">{f.forwardPE?.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 text-gray-400">PEG Ratio</td>
-                      <td className="py-3 text-right text-white font-mono">{f.pegRatio}</td>
-                      <td className="py-3 pl-8 text-gray-400">Price/Sales (TTM)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.ps?.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 text-gray-400">Price/Book (MRQ)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.pb?.toFixed(2)}</td>
-                      <td className="py-3 pl-8 text-gray-400">Book Value Per Share</td>
-                      <td className="py-3 text-right text-white font-mono">{f.bookValue}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 text-gray-400">Debt/Equity (MRQ)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.debtToEquity}</td>
-                      <td className="py-3 pl-8 text-gray-400">Current Ratio (MRQ)</td>
-                      <td className="py-3 text-right text-white font-mono">{f.currentRatio}</td>
-                    </tr>
+                    <tr><td className="py-2 text-gray-400">P/E</td><td className="py-2 text-right text-white">{f.pe?.toFixed(2)}</td></tr>
+                    <tr><td className="py-2 text-gray-400">Forward P/E</td><td className="py-2 text-right text-white">{f.forwardPE?.toFixed(2)}</td></tr>
+                    <tr><td className="py-2 text-gray-400">PEG</td><td className="py-2 text-right text-white">{f.pegRatio}</td></tr>
+                    <tr><td className="py-2 text-gray-400">P/S</td><td className="py-2 text-right text-white">{f.ps?.toFixed(2)}</td></tr>
+                    <tr><td className="py-2 text-gray-400">P/B</td><td className="py-2 text-right text-white">{f.pb?.toFixed(2)}</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -692,42 +557,32 @@ export default function MiniBloomberg() {
         
         return (
           <div className="p-6">
-            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Zap className="mr-2"/> CRYPTOCURRENCY MARKET</h2>
-            
-            <div className="mb-8">
-              <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider">Major Cryptocurrencies</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {crypto?.map((item: StockData) => (
-                  <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange transition-all group">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-white text-lg">{item.symbol.replace('-USD','')}</span>
-                      {item.change >= 0 ? <TrendingUp size={18} className="text-bloomberg-green"/> : <TrendingDown size={18} className="text-bloomberg-red"/>}
-                    </div>
-                    <div className="text-2xl font-terminal text-white mb-1">${item.price?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                    <div className={`text-sm font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                      {item.changePercent > 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">Vol: ${(parseInt(item.volume || '0') / 1e9).toFixed(2)}B</div>
+            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Zap className="mr-2"/> CRYPTO MARKET</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+              {crypto?.map((item: StockData) => (
+                <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-white text-lg">{item.symbol.replace('-USD','')}</span>
+                    {item.change >= 0 ? <TrendingUp size={18} className="text-bloomberg-green"/> : <TrendingDown size={18} className="text-bloomberg-red"/>}
                   </div>
-                ))}
-              </div>
+                  <div className="text-2xl font-terminal text-white mb-1">${item.price?.toLocaleString()}</div>
+                  <div className={`text-sm font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
+                    {item.changePercent > 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div>
-              <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider">Crypto-Related Equities</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {cryptoStocks?.map((item: StockData) => (
-                  <div key={item.symbol} className="bg-bloomberg-dark p-3 border border-bloomberg-gray rounded hover:bg-bloomberg-gray cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-white">{item.symbol}</span>
-                      <span className={`text-xs font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                        {item.changePercent?.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-400">${item.price?.toFixed(2)}</div>
+            <h3 className="text-sm font-bold text-gray-400 mb-4">Crypto Stocks</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {cryptoStocks?.map((item: StockData) => (
+                <div key={item.symbol} className="bg-bloomberg-dark p-3 border border-bloomberg-gray rounded cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-white">{item.symbol}</span>
+                    <span className={`text-xs ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>{item.changePercent?.toFixed(1)}%</span>
                   </div>
-                ))}
-              </div>
+                  <div className="text-sm text-gray-400">${item.price?.toFixed(2)}</div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -735,24 +590,20 @@ export default function MiniBloomberg() {
       case 'ETF':
         return (
           <div className="p-6">
-            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> ETF THEMES & TRENDS</h2>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> ETF THEMES</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {activeData.data?.map((item: StockData, idx: number) => {
                 const theme = activeData.themes.find((t: any) => t.symbol === item.symbol);
                 return (
-                  <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange transition-all cursor-pointer group" onClick={() => handleCommand(`DES ${item.symbol}`)}>
+                  <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
                     <div className="flex justify-between items-start mb-2">
-                      <span className="bg-bloomberg-orange text-black text-xs font-bold px-1.5 py-0.5 rounded">{item.symbol}</span>
-                      {item.change >= 0 ? <TrendingUp size={14} className="text-bloomberg-green"/> : <TrendingDown size={14} className="text-bloomberg-red"/>}
+                      <span className="bg-bloomberg-orange text-black text-xs font-bold px-1.5 rounded">{item.symbol}</span>
                     </div>
                     <div className="text-sm font-bold text-white mb-1">{theme?.theme}</div>
                     <div className="text-xs text-gray-400 mb-2">{theme?.desc}</div>
                     <div className="flex justify-between items-end">
                       <span className="text-lg font-terminal text-white">${item.price?.toFixed(2)}</span>
-                      <span className={`text-xs font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                        {item.changePercent?.toFixed(1)}%
-                      </span>
+                      <span className={`text-xs font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>{item.changePercent?.toFixed(1)}%</span>
                     </div>
                   </div>
                 );
@@ -765,52 +616,30 @@ export default function MiniBloomberg() {
         return (
           <div className="p-6">
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Wind className="mr-2"/> ECONOMIC INDICATORS</h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-bloomberg-dark p-5 border border-bloomberg-gray rounded">
-                <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase">Fear & Volatility</h3>
+                <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase">VIX</h3>
                 {activeData.data?.filter((i: StockData) => i.symbol === '^VIX').map((item: StockData) => (
                   <div key={item.symbol} className="text-center">
                     <div className="text-5xl font-terminal text-white mb-2">{item.price?.toFixed(2)}</div>
-                    <div className={`text-lg font-bold ${item.change >= 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'}`}>
-                      VIX Index {item.change >= 0 ? '▲' : '▼'}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">
-                      {item.price && item.price > 30 ? 'High Volatility' : item.price && item.price > 20 ? 'Elevated' : 'Low Volatility'}
-                    </div>
+                    <div className={`text-lg font-bold ${item.change >= 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'}`}>Volatility Index</div>
                   </div>
                 ))}
               </div>
-
               <div className="col-span-2 bg-bloomberg-dark p-5 border border-bloomberg-gray rounded">
                 <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase">Treasury Yields</h3>
                 <div className="space-y-3">
-                  {activeData.data?.filter((i: StockData) => ['^TNX','^FVX','^TYX'].includes(i.symbol) || i.symbol.startsWith('DGS')).map((item: StockData) => (
+                  {activeData.data?.filter((i: StockData) => ['^TNX','^FVX','^TYX'].includes(i.symbol)).map((item: StockData) => (
                     <div key={item.symbol} className="flex items-center justify-between">
-                      <span className="text-gray-300 w-24">{item.symbol === '^TNX' ? '10-Year' : item.symbol === '^FVX' ? '5-Year' : item.symbol === '^TYX' ? '30-Year' : item.symbol}</span>
+                      <span className="text-gray-300 w-20">{item.symbol === '^TNX' ? '10Y' : item.symbol === '^FVX' ? '5Y' : '30Y'}</span>
                       <div className="flex-1 mx-4 bg-bloomberg-gray h-2 rounded-full overflow-hidden">
                         <div className="h-full bg-bloomberg-blue" style={{ width: `${(item.price || 0) * 10}%` }}></div>
                       </div>
-                      <span className="text-white font-mono w-16 text-right">{item.price?.toFixed(2)}%</span>
-                      <span className={`ml-4 text-xs w-16 text-right ${item.change >= 0 ? 'text-bloomberg-red' : 'text-bloomberg-green'}`}>
-                        {item.change >= 0 ? '+' : ''}{item.change?.toFixed(2)}
-                      </span>
+                      <span className="text-white font-mono">{item.price?.toFixed(2)}%</span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {activeData.data?.filter((i: StockData) => ['GC=F','CL=F','SI=F','NG=F'].includes(i.symbol)).map((item: StockData) => (
-                <div key={item.symbol} className="bg-bloomberg-dark p-4 border border-bloomberg-gray rounded text-center">
-                  <div className="text-gray-400 text-xs mb-1">{item.symbol === 'GC=F' ? 'GOLD' : item.symbol === 'CL=F' ? 'CRUDE OIL' : item.symbol === 'SI=F' ? 'SILVER' : 'NATURAL GAS'}</div>
-                  <div className="text-2xl font-terminal text-white">${item.price?.toFixed(2)}</div>
-                  <div className={`text-sm ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                    {item.changePercent?.toFixed(2)}%
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         );
@@ -818,42 +647,31 @@ export default function MiniBloomberg() {
       case 'SECF':
         return (
           <div className="p-6">
-            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> SECTOR PERFORMANCE (S&P 500)</h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                {activeData.data?.map((item: StockData, idx: number) => {
-                  const sector = activeData.sectors.find((s: any) => s.symbol === item.symbol);
-                  const Icon = sector?.icon || Layers;
-                  const isUp = item.change >= 0;
-                  
-                  return (
-                    <div key={item.symbol} className="flex items-center bg-bloomberg-dark p-3 border border-bloomberg-gray rounded hover:border-bloomberg-orange transition-colors cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
-                      <div className={`p-2 rounded mr-4 ${isUp ? 'bg-bloomberg-green/20 text-bloomberg-green' : 'bg-bloomberg-red/20 text-bloomberg-red'}`}>
-                        <Icon size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-white">{sector?.name}</div>
-                        <div className="text-xs text-gray-400">{item.symbol}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-terminal text-white">${item.price?.toFixed(2)}</div>
-                        <div className={`text-sm font-bold ${isUp ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
-                          {isUp ? '+' : ''}{item.changePercent?.toFixed(2)}%
-                        </div>
+            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><PieChart className="mr-2"/> SECTOR PERFORMANCE</h2>
+            <div className="space-y-3">
+              {activeData.data?.map((item: StockData, idx: number) => {
+                const sector = activeData.sectors.find((s: any) => s.symbol === item.symbol);
+                const Icon = sector?.icon || Layers;
+                const isUp = item.change >= 0;
+                
+                return (
+                  <div key={item.symbol} className="flex items-center bg-bloomberg-dark p-3 border border-bloomberg-gray rounded hover:border-bloomberg-orange cursor-pointer" onClick={() => handleCommand(`DES ${item.symbol}`)}>
+                    <div className={`p-2 rounded mr-4 ${isUp ? 'bg-bloomberg-green/20 text-bloomberg-green' : 'bg-bloomberg-red/20 text-bloomberg-red'}`}>
+                      <Icon size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-white">{sector?.name}</div>
+                      <div className="text-xs text-gray-400">{item.symbol}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-terminal text-white">${item.price?.toFixed(2)}</div>
+                      <div className={`text-sm font-bold ${isUp ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
+                        {isUp ? '+' : ''}{item.changePercent?.toFixed(2)}%
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              
-              <div className="bg-bloomberg-dark p-6 border border-bloomberg-gray rounded flex items-center justify-center">
-                <div className="text-center">
-                  <PieChart size={64} className="text-bloomberg-orange mx-auto mb-4 opacity-50" />
-                  <p className="text-gray-400 text-sm">Sector allocation visualization</p>
-                  <p className="text-xs text-gray-600 mt-2">Data sourced from SPDR sector ETFs</p>
-                </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -862,13 +680,16 @@ export default function MiniBloomberg() {
         return (
           <div className="p-6">
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Factory className="mr-2"/> INDUSTRY VIEW</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {activeData.data?.map((item: StockData) => (
-                <HeatmapBox key={item.symbol} item={item} size="small" />
+                <div key={item.symbol} className="h-24 bg-bloomberg-dark border border-bloomberg-gray p-3 flex flex-col justify-between cursor-pointer hover:border-white" onClick={() => handleCommand(`DES ${item.symbol}`)}>
+                  <div className="font-bold text-white text-sm">{item.symbol}</div>
+                  <div className="text-xs text-gray-400">${item.price?.toFixed(2)}</div>
+                  <div className={`text-right font-bold ${item.change >= 0 ? 'text-bloomberg-green' : 'text-bloomberg-red'}`}>
+                    {item.changePercent?.toFixed(1)}%
+                  </div>
+                </div>
               ))}
-            </div>
-            <div className="mt-6 text-xs text-gray-500">
-              <p>Industry ETFs tracked: Insurance (KIE), Broker-Dealers (IAI), Healthcare Equipment (XHE), Biotech (XBI), Retail (XRT), Homebuilders (XHB), Software (XSW), Transportation (XTN), Metals & Mining (XME), Oil & Gas Equipment (XES)</p>
             </div>
           </div>
         );
@@ -876,7 +697,7 @@ export default function MiniBloomberg() {
       case 'RV':
         return (
           <div className="p-6">
-            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><BarChart3 className="mr-2"/> RELATIVE VALUATION (TECH GIANTS)</h2>
+            <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><BarChart3 className="mr-2"/> RELATIVE VALUATION</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -889,7 +710,6 @@ export default function MiniBloomberg() {
                     <th className="p-3">PEG</th>
                     <th className="p-3">P/S</th>
                     <th className="p-3">P/B</th>
-                    <th className="p-3">EV/EBITDA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -903,7 +723,6 @@ export default function MiniBloomberg() {
                       <td className="p-3 text-gray-300">{item.pegRatio?.toFixed(2)}</td>
                       <td className="p-3 text-gray-300">{item.ps?.toFixed(2)}</td>
                       <td className="p-3 text-gray-300">{item.pb?.toFixed(2)}</td>
-                      <td className="p-3 text-gray-300">{item.enterpriseValue && item.ebitda ? (parseFloat(item.enterpriseValue) / parseFloat(item.ebitda)).toFixed(1) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -918,12 +737,12 @@ export default function MiniBloomberg() {
             <h2 className="text-bloomberg-orange text-xl font-bold mb-6 flex items-center"><Newspaper className="mr-2"/> MARKET NEWS</h2>
             <div className="grid grid-cols-1 gap-4">
               {activeData.news?.map((n: NewsItem, i: number) => (
-                <a key={i} href={n.link} target="_blank" rel="noreferrer" className="block bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange transition-colors group">
+                <a key={i} href={n.link} target="_blank" rel="noreferrer" className="block bg-bloomberg-dark p-4 border border-bloomberg-gray rounded hover:border-bloomberg-orange">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-bloomberg-blue text-xs font-bold">{n.publisher}</span>
                     <span className="text-gray-500 text-xs">{n.published}</span>
                   </div>
-                  <h3 className="text-white font-bold group-hover:text-bloomberg-orange transition-colors">{n.title}</h3>
+                  <h3 className="text-white font-bold">{n.title}</h3>
                 </a>
               ))}
             </div>
@@ -938,13 +757,37 @@ export default function MiniBloomberg() {
   return (
     <div className="flex flex-col h-screen bg-bloomberg-black text-gray-200 font-sans overflow-hidden selection:bg-bloomberg-orange selection:text-black">
       
-      <TickerTape />
+      {/* Ticker Tape */}
+      <div className="h-10 bg-bloomberg-black border-b border-bloomberg-gray flex items-center overflow-hidden relative z-20">
+        <div className="bg-bloomberg-orange text-black font-bold px-4 h-full flex items-center z-10 shadow-lg shrink-0">
+          MARKETS
+        </div>
+        <div className="flex animate-ticker">
+          {[...tickerData, ...tickerData].map((item, idx) => {
+            const isUp = item.change >= 0;
+            const color = isUp ? 'text-bloomberg-green' : 'text-bloomberg-red';
+            const Icon = isUp ? TrendingUp : TrendingDown;
+            const label = INDICES.find(i => i.symbol === item.symbol)?.name || item.symbol;
+            return (
+              <div key={`${item.symbol}-${idx}`} className="flex items-center space-x-2 px-4 whitespace-nowrap">
+                <span className="font-bold text-gray-300">{label}</span>
+                <span className={color}>{item.price?.toFixed(2)}</span>
+                <span className={`flex items-center text-xs ${color}`}>
+                  <Icon size={12} className="mr-1" />
+                  {Math.abs(item.changePercent).toFixed(2)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
+      {/* Main Content */}
       <div className="flex-1 overflow-y-auto relative bg-bloomberg-black" onClick={() => inputRef.current?.focus()}>
         
         {view === 'welcome' && !activeData && (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <div className="w-24 h-24 bg-bloomberg-orange rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,107,0,0.3)] animate-pulse">
+            <div className="w-24 h-24 bg-bloomberg-orange rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,107,0,0.3)]">
               <Terminal size={48} className="text-black" />
             </div>
             <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">MINI BLOOMBERG <span className="text-bloomberg-orange">TERMINAL</span></h1>
@@ -952,13 +795,12 @@ export default function MiniBloomberg() {
               Real-time market data, analytics, and financial intelligence. 
               Type <span className="text-bloomberg-orange font-bold">HELP</span> to begin.
             </p>
-            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl">
               {['WEI', 'GP', 'DES AAPL', 'STX'].map((cmd) => (
                 <button 
                   key={cmd}
                   onClick={() => handleCommand(cmd)}
-                  className="p-4 bg-bloomberg-dark border border-bloomberg-gray hover:border-bloomberg-orange hover:text-bloomberg-orange hover:scale-105 transition-all rounded text-sm font-bold"
+                  className="p-4 bg-bloomberg-dark border border-bloomberg-gray hover:border-bloomberg-orange hover:text-bloomberg-orange transition-all rounded text-sm font-bold"
                 >
                   {cmd}
                 </button>
@@ -984,6 +826,7 @@ export default function MiniBloomberg() {
         )}
       </div>
 
+      {/* Command Input */}
       <div className="bg-bloomberg-dark border-t border-bloomberg-gray p-2 z-30">
         {suggestions.length > 0 && (
           <div className="absolute bottom-16 left-0 w-full bg-bloomberg-gray border border-bloomberg-light-gray shadow-2xl max-h-48 overflow-y-auto">
@@ -1009,7 +852,7 @@ export default function MiniBloomberg() {
             onChange={onInputChange}
             onKeyDown={onKeyDown}
             className="flex-1 bg-transparent border-none outline-none text-white font-terminal uppercase placeholder-gray-700"
-            placeholder="TYPE COMMAND (E.G., DES AAPL, FA PLTR, SECF)..."
+            placeholder="TYPE COMMAND (E.G., DES AAPL, FA PLTR)..."
             spellCheck={false}
             autoComplete="off"
           />
